@@ -827,6 +827,183 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 ---
 
+## 12. Z-Score and Its Applications
+
+### Core Idea
+The **Z-score** tells you how many standard deviations a specific data point is away from the mean. It's the same formula used in Section 1, but here the focus is on its two big real-world uses: **standardization** for ML models, and **comparing values across different distributions**.
+
+### The Formula
+
+```
+Z = (xᵢ - μ) / σ
+```
+
+| Symbol | Name | Meaning |
+|---|---|---|
+| `xᵢ` | individual data point | The specific value you're converting |
+| `μ` | mean | Mean of the distribution `xᵢ` belongs to |
+| `σ` | standard deviation | Spread of that same distribution |
+| `Z` | Z-score | How many std devs `xᵢ` is from the mean (sign shows direction: + above, - below) |
+
+### Worked Example — Single Value
+Given `μ = 120`, `σ = 12`, `x = 144`:
+```
+Z = (144 - 120) / 12 = 24 / 12 = 2
+```
+This point sits exactly **2 standard deviations above the mean**.
+
+### Application 1 — Standardization (Feature Scaling in ML)
+Before feeding features like **age, weight, height** into a machine learning model, they're often on very different scales. Standardization (Z-score scaling) rescales every feature to have mean 0 and std dev 1, so no single feature dominates a distance-based or gradient-based algorithm just because of its raw scale.
+
+This is exactly what `sklearn.preprocessing.StandardScaler` implements — and it's the same transformation used "in-stream" (i.e., applied consistently to both training and incoming production data) in real ML pipelines.
+
+```python
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
+X = np.array([
+    [25, 70, 175],   # age, weight (kg), height (cm)
+    [40, 85, 180],
+    [30, 60, 165],
+])
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+print(X_scaled)
+```
+
+### Application 2 — Comparing Scores Across Different Distributions
+Z-scores let you fairly compare two values that come from **different distributions** (different means and std devs), because both get converted to the same standard scale.
+
+**Worked example — India's batting average, 2020 vs. 2021:**
+
+| Year | Avg (μ) | Std Dev (σ) | Player's Score |
+|---|---|---|---|
+| 2020 | 181 | 12 | 187 |
+| 2021 | 182 | 5 | 185 |
+
+```
+Z(2020) = (187 - 181) / 12 = 6/12  = 0.5
+Z(2021) = (185 - 182) / 5  = 3/5   = 0.6
+```
+
+**Interpretation:** even though the raw 2021 score (185) is lower than the raw 2020 score (187), the **2021 performance is relatively better** — it sits 0.6 standard deviations above that year's mean, compared to only 0.5 for 2020. Raw scores alone would have given the wrong conclusion, because the two years had different team-average performance and different consistency (spread).
+
+### Python Implementation
+
+```python
+def z_score(x, mu, sigma):
+    return (x - mu) / sigma
+
+# Single-value example
+print(z_score(144, mu=120, sigma=12))   # 2.0
+
+# Comparing across two different distributions
+z_2020 = z_score(187, mu=181, sigma=12)
+z_2021 = z_score(185, mu=182, sigma=5)
+
+print(f"2020 Z-score: {z_2020:.2f}")
+print(f"2021 Z-score: {z_2021:.2f}")
+print("Better relative performance:", "2021" if z_2021 > z_2020 else "2020")
+```
+
+### Why This Matters for ML
+1. **Standardization** — nearly every distance-based (k-NN, k-means), gradient-based (linear/logistic regression, neural nets), or regularized (Ridge/Lasso) model benefits from or requires standardized features.
+2. **Cross-distribution comparison** — useful for anomaly/fraud scoring: a transaction amount that's "high" needs to be judged relative to *that customer's or that merchant category's* mean and std dev, not a global raw threshold. A Z-score-based anomaly flag naturally adapts to each group's distribution.
+
+---
+
+## 13. Power Law Distribution (Pareto Distribution & the 80-20 Rule)
+
+### Core Idea
+A **Power Law Distribution** describes situations where **a relative change in one quantity results in a proportional change in another quantity** — producing a curve with a sharp spike near the origin and a long, slowly-decaying tail. This is fundamentally different from the symmetric bell curve of a Gaussian (normal) distribution.
+
+| Distribution | Shape | Typical Examples |
+|---|---|---|
+| **Gaussian (Normal)** | Symmetric bell curve | Age, weight, height |
+| **Log-Normal** | Right-skewed, single peak, moderate tail | Income (moderate skew), some fraud amounts |
+| **Power Law / Pareto** | Extreme spike near the minimum, very long tail | Wealth distribution, sales concentration, bug/crash concentration |
+
+### The Pareto Distribution (Pareto Type I)
+
+The most common power law distribution. Its probability density function (PDF) is controlled by a shape parameter `α` (alpha):
+
+| Symbol | Name | Meaning |
+|---|---|---|
+| `α` (alpha) | shape parameter | Controls how "heavy" the tail is — smaller `α` = heavier tail, more extreme inequality |
+| `xₘ` | scale parameter (minimum value) | The smallest possible value the variable can take |
+| `Pr(X = x)` | probability density | Height of the curve at value `x` |
+| `Pr(X ≤ x)` | cumulative probability | Probability that the variable is at most `x` (the CDF) |
+
+**Reading the PDF chart:** as `α` decreases (1, 2, 3, ...→∞), the curve becomes less extreme — at `α = ∞` the distribution collapses to a single spike (a Dirac delta) at `xₘ`, meaning zero variability. Smaller `α` values (like `α = 1`) produce the classic "few dominate, many trail off" shape.
+
+**Reading the CDF chart:** the cumulative distribution function shows how quickly probability accumulates. Larger `α` reaches close to 1.0 (100%) very quickly (concentrated near the minimum), while smaller `α` climbs more slowly (heavier tail, more spread into large values).
+
+### The 80-20 Rule (Pareto Principle)
+A famous special case / rule of thumb derived from Pareto-like distributions:
+
+> **80% of the effects come from 20% of the causes.**
+
+| # | Real-World Example |
+|---|---|
+| 1 | 80% of a company's **sales** come from 20% of its overall **products** |
+| 2 | 80% of **software crashes** are caused by 20% of the overall **bugs** |
+| 3 | 80% of a population's **wealth** is held by 20% of the people |
+| 4 | (generalized) 80% of outcomes trace back to 20% of inputs, in many business/ops contexts |
+
+This is why the 80-20 rule shows up constantly in **prioritization**: fixing the top 20% of bugs eliminates most crashes; focusing on the top 20% of products/customers drives most revenue.
+
+### Distinguishing the Three Curve Shapes
+
+| Shape | Peak Location | Tail Behavior | Typical Cause |
+|---|---|---|---|
+| **Gaussian** | Centered, symmetric | Thin, symmetric on both sides | Additive processes (many small independent effects summing up) |
+| **Log-Normal** | Off-center, single peak, moderate right skew | Moderate tail | Multiplicative processes (effects multiply rather than add) |
+| **Power Law / Pareto** | Sharp spike near the minimum | Very long, "fat" tail | Preferential attachment / "rich get richer" dynamics (wealth, popularity, network connections) |
+
+### Python Implementation
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import stats
+
+alpha = 2.0    # shape parameter
+xm = 1.0       # minimum value (scale)
+
+# Generate Pareto Type I distributed data
+rng = np.random.default_rng(0)
+pareto_data = (rng.pareto(alpha, size=10_000) + 1) * xm
+
+# PDF and CDF from scipy
+x = np.linspace(1, 10, 500)
+pareto_dist = stats.pareto(b=alpha, scale=xm)
+pdf = pareto_dist.pdf(x)
+cdf = pareto_dist.cdf(x)
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+axes[0].plot(x, pdf, color="crimson")
+axes[0].set_title(f"Pareto PDF (alpha={alpha})")
+
+axes[1].plot(x, cdf, color="steelblue")
+axes[1].set_title(f"Pareto CDF (alpha={alpha})")
+plt.tight_layout()
+plt.show()
+
+# Verifying an 80-20-style concentration in simulated "sales" data
+sales = np.sort(pareto_data)[::-1]              # descending
+cum_sales = np.cumsum(sales) / sales.sum()
+top_20_pct_count = int(0.2 * len(sales))
+print(f"Top 20% of items generate {cum_sales[top_20_pct_count - 1]:.1%} of total sales")
+```
+
+### Why This Matters for ML and Analytics
+- **Feature engineering:** power-law-distributed features (transaction counts per customer, revenue per merchant, connections per node in a fraud ring graph) usually need a log transform before use in linear models — similar to the log-normal case in Section 1, but often needing more aggressive transforms (e.g., `log1p`) because of the extreme spike near the minimum.
+- **Fraud/churn relevance:** fraud amounts and merchant-level fraud counts frequently follow power-law-like concentration — a small fraction of merchants or accounts can account for the majority of fraud losses, which is a direct analog of the 80-20 rule and useful for prioritizing investigation resources.
+- **Distinguishing from log-normal:** if the histogram shows a moderate right skew with one clear peak, treat it as log-normal (Section 1's method). If it shows an extreme spike at the minimum with a very long flat tail, treat it as power-law/Pareto — the imputation, scaling, and modeling choices differ.
+
+---
+
 ## Quick-Reference Symbol Glossary
 
 | Symbol | Name | Common Meaning |
@@ -852,6 +1029,8 @@ X_train, X_test, y_train, y_test = train_test_split(
 | `q` | — | `1 - p`, probability of failure in a Bernoulli trial |
 | `Q1, Q2, Q3` | quartiles | 25th, 50th (median), and 75th percentiles |
 | `IQR` | interquartile range | `Q3 - Q1`; spread of the middle 50% of data |
+| `α` (Pareto) | shape parameter | Controls tail heaviness of a Pareto/power-law distribution (smaller = heavier tail) |
+| `xₘ` | scale parameter | Minimum possible value in a Pareto distribution |
 
 ---
 
@@ -863,3 +1042,5 @@ X_train, X_test, y_train, y_test = train_test_split(
 5. Treat your binary fraud/churn label as a Bernoulli variable — compute its mean (base rate) and variance by hand, then confirm with `scipy.stats.bernoulli`.
 6. Run the five-number summary + IQR fencing on a raw transaction-amount column before deciding whether flagged "outliers" are noise or genuine fraud signal.
 7. Audit your train/test split: confirm you used stratified sampling on the target label, not plain random sampling.
+8. Standardize a mixed-scale feature set (e.g., age, transaction amount, account tenure) with `StandardScaler`, and manually verify one Z-score by hand.
+9. Plot the distribution of transaction amounts or fraud counts per merchant — check whether it looks Gaussian, log-normal, or power-law/Pareto, and let that decide your transform and imputation strategy.
